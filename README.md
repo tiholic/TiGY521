@@ -1,2 +1,2 @@
 # TiGY521
-GY521 library for Quad
+GY521 Library for Drones
