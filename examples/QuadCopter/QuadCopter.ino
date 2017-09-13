@@ -3,7 +3,8 @@
 /**
 * instanciating GY521
 **/
-TiGY521 acceleroGyro = TiGY521();
+#define GY521_INTERRUPT_PIN = 2;
+TiGY521 acceleroGyro = TiGY521(2);
 
 void setup() {
   /**
@@ -17,8 +18,10 @@ void GYProcess(float y, float p, float r){
   if(y==0 && p==0 && r==0){
     //interrupt...
   }else{  
-    Serial.println(y);
-    Serial.println(p);
+    Serial.print(y);
+    Serial.print("\t");
+    Serial.print(p);
+    Serial.print("\t");
     Serial.println(r);
   }
 }
@@ -29,5 +32,4 @@ void loop() {
   **/
   float* reading = acceleroGyro.read();
   GYProcess(reading[0], reading[1], reading[2]);
-  
 }

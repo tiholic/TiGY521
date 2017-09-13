@@ -55,11 +55,11 @@ THE SOFTWARE.
     #include "Wire.h"
 #endif
 
-#define TiGY521_INTERRUPT_PIN 2
+// #define TiGY521_INTERRUPT_PIN 2
 
 // MPU6050 mpu;
-TiGY521::TiGY521(){
-	
+TiGY521::TiGY521(int INTERRUPT_PIN){
+	_INTERRUPT_PIN = INTERRUPT_PIN;
 	// MPU6050 mpu;
 	bool dmpReady = false;  // set true if DMP init was successful
 	uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
@@ -81,11 +81,8 @@ TiGY521::TiGY521(){
         Fastwire::setup(400, true);
     #endif
 
-    pinMode(TiGY521_INTERRUPT_PIN, INPUT);
-    mpu.initialize();
-    // verify connection
-    debug("Testing device connections...");
-    debug(mpu.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
+    pinMode(_INTERRUPT_PIN, INPUT);
+    
 }
 
 volatile bool mpuInterrupt = false;
@@ -94,7 +91,13 @@ void dmpDataReady() {
 }
 
 void TiGY521::initialize(){
-	    // load and configure the DMP
+    
+    mpu.initialize();
+    // verify connection
+    debug("Testing device connections...");
+    debug(mpu.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
+
+    // load and configure the DMP
     debug("Initializing DMP...");
     uint8_t devStatus = mpu.dmpInitialize();
 
@@ -111,7 +114,7 @@ void TiGY521::initialize(){
     mpu.setYGyroOffset(76);
     mpu.setZGyroOffset(-85);
     mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
-    attachInterrupt(digitalPinToInterrupt(TiGY521_INTERRUPT_PIN), dmpDataReady, RISING);
+    attachInterrupt(digitalPinToInterrupt(_INTERRUPT_PIN), dmpDataReady, RISING);
     // make sure it worked (returns 0 if so)
     if (devStatus == 0) {
         // turn on the DMP, now that it's ready
