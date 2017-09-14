@@ -1,10 +1,6 @@
 TiGY521	KEYWORD1
 initialize	KEYWORD2
 read	KEYWORD2
-
-TiGY521	KEYWORD1
-initialize	KEYWORD2
-read	KEYWORD2
 caliberate	KEYWORD2
 getYaw	KEYWORD2
 getPitch	KEYWORD2
