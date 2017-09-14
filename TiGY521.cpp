@@ -247,12 +247,15 @@ void TiGY521::caliberate(int LED_PIN) {
             rolls[i] = getRoll();
         }
         digitalWrite(LED_PIN, LOW);
-        if(isDirectionCaliberated(yaws) || isDirectionCaliberated(pitches) || isDirectionCaliberated(rolls) ){
+        bool yc = isDirectionCaliberated(yaws);
+        bool pc = isDirectionCaliberated(pitches);
+        bool rc = isDirectionCaliberated(rolls);
+        if(yc || pc || rc){
             digitalWrite(LED_PIN, HIGH);
         }else{
             digitalWrite(LED_PIN, LOW);
         }
-        if( isDirectionCaliberated(yaws) && isDirectionCaliberated(pitches) && isDirectionCaliberated(rolls) ){
+        if( yc && pc && rc ){
             ssc--;
             Serial.print("caliberated... Checking for successive caliberations.");
         }else{
