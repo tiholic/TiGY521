@@ -3,21 +3,26 @@
 /**
 * instanciating GY521
 **/
-#define GY521_INTERRUPT_PIN = 2;
-TiGY521 acceleroGyro = TiGY521(2);
+TiGY521 gyro = TiGY521();
+int LED_PIN = 12;
 
 void setup() {
   /**
   * initializing GY521
   **/
+  pinMode(LED_PIN, OUTPUT);
   Serial.begin(115200);
-  acceleroGyro.initialize();
+  while (!Serial);
+  Serial.println(F("Initializing..."));
+  gyro.initialize();
+  Serial.println(F("Caliberating..."));
+  gyro.caliberate(LED_PIN);
 }
 
 void GYProcess(float y, float p, float r){
   if(y==0 && p==0 && r==0){
-    //interrupt...
-  }else{  
+   Serial.println("No change in data...");
+  }else{
     Serial.print(y);
     Serial.print("\t");
     Serial.print(p);
@@ -30,6 +35,6 @@ void loop() {
   /**
   * Start reading
   **/
-  float* reading = acceleroGyro.read();
-  GYProcess(reading[0], reading[1], reading[2]);
+  gyro.read();
+  GYProcess(gyro.getYaw(), gyro.getPitch(), gyro.getRoll());
 }

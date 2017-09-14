@@ -55,11 +55,10 @@ THE SOFTWARE.
     #include "Wire.h"
 #endif
 
-// #define TiGY521_INTERRUPT_PIN 2
+#define TiGY521_INTERRUPT_PIN 2
 
 // MPU6050 mpu;
-TiGY521::TiGY521(int INTERRUPT_PIN){
-	_INTERRUPT_PIN = INTERRUPT_PIN;
+TiGY521::TiGY521(){
 	// MPU6050 mpu;
 	bool dmpReady = false;  // set true if DMP init was successful
 	uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
@@ -81,8 +80,7 @@ TiGY521::TiGY521(int INTERRUPT_PIN){
         Fastwire::setup(400, true);
     #endif
 
-    pinMode(_INTERRUPT_PIN, INPUT);
-    
+    pinMode(TiGY521_INTERRUPT_PIN, INPUT);
 }
 
 volatile bool mpuInterrupt = false;
@@ -95,10 +93,10 @@ void TiGY521::initialize(){
     mpu.initialize();
     // verify connection
     debug("Testing device connections...");
-    debug(mpu.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
+    debugln(mpu.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
 
     // load and configure the DMP
-    debug("Initializing DMP...");
+    debugln("Initializing DMP...");
     uint8_t devStatus = mpu.dmpInitialize();
 
     // supply your own gyro offsets here, scaled for min sensitivity
@@ -114,44 +112,51 @@ void TiGY521::initialize(){
     mpu.setYGyroOffset(76);
     mpu.setZGyroOffset(-85);
     mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
-    attachInterrupt(digitalPinToInterrupt(_INTERRUPT_PIN), dmpDataReady, RISING);
     // make sure it worked (returns 0 if so)
     if (devStatus == 0) {
         // turn on the DMP, now that it's ready
-        debug("Enabling DMP...");
+        debugln("Enabling DMP...");
         mpu.setDMPEnabled(true);
 
         // enable Arduino interrupt detection
-        debug("Enabling interrupt detection (Arduino external interrupt 0)...");
+        debugln("Enabling interrupt detection (Arduino external interrupt 0)...");
+        attachInterrupt(digitalPinToInterrupt(TiGY521_INTERRUPT_PIN), dmpDataReady, RISING);
+
         mpuIntStatus = mpu.getIntStatus();
 
         // set our DMP Ready flag so the main loop() function knows it's okay to use it
-        debug("DMP ready! Waiting for first interrupt...");
+        debugln("DMP ready! Waiting for first interrupt...");
         dmpReady = true;
 
         // get expected DMP packet size for later comparison
         packetSize = mpu.dmpGetFIFOPacketSize();
+        // fifoCount = 0;
     } else {
         // ERROR!
         // 1 = initial memory load failed
         // 2 = DMP configuration updates failed
         // (if it's going to break, usually the code will be 1)
         debug("DMP Initialization failed - code:");
-        debug(devStatus);
+        debugln(devStatus);
     }
 }
 
-float* TiGY521::read(){
+float ypr[3]; // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
+void TiGY521::read(){
 	// if programming failed, don't try to do anything
     if (!dmpReady) return;
+    
+    // if un unterrupted, 
+    /*if (!mpuInterrupt && fifoCount < packetSize) {*/
+    /*if (!mpuInterrupt) {
+        ypr[0] = 0;
+        ypr[1] = 0;
+        ypr[2] = 0;
+        return;
+    }*/
 
-    // wait for MPU interrupt or extra packet(s) available
-    while (!mpuInterrupt && fifoCount < packetSize) {
-        float x[3] = {0, 0, 0};
-        return x;
-    }
     // reset interrupt flag and get INT_STATUS byte
-    mpuInterrupt = false;
+    // mpuInterrupt = false;
     mpuIntStatus = mpu.getIntStatus();
 
     // get current FIFO count
@@ -161,7 +166,7 @@ float* TiGY521::read(){
     if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
         // reset so we can continue cleanly
         mpu.resetFIFO();
-        debug("FIFO overflow!");
+        debugln("FIFO overflow!");
 
     // otherwise, check for DMP data ready interrupt (this should happen frequently)
     } else if (mpuIntStatus & 0x02) {
@@ -178,22 +183,109 @@ float* TiGY521::read(){
         // display Euler angles in degrees
         Quaternion q;           // [w, x, y, z]         quaternion container
         VectorFloat gravity;    // [x, y, z]            gravity vector
-        float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
         mpu.dmpGetQuaternion(&q, fifoBuffer);
         mpu.dmpGetGravity(&gravity, &q);
         mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-        float ypr_mod[3];
-		ypr_mod[0] = ypr[0] * 180/M_PI;
-		ypr_mod[1] = ypr[1] * 180/M_PI;
-		ypr_mod[2] = ypr[2] * 180/M_PI;
-        return ypr;
+        ypr[0] = ypr[0] * 180/M_PI;
+		ypr[1] = ypr[1] * 180/M_PI;
+		ypr[2] = ypr[2] * 180/M_PI;
     }
 }
 
+float TiGY521::getYaw() {
+    return ypr[0] - yawOffset;
+}
 
-void TiGY521::debug(const char* message) {
+float TiGY521::getPitch() {
+    return ypr[1] - pitchOffset;
+}
+
+float TiGY521::getRoll() {
+    return ypr[2] - rollOffset;
+}
+
+bool TiGY521::isDirectionCaliberated(float* readings){
+    float avg = 0;
+    int i=0;
+    for(i=0; i<readingCount; i++){
+        avg += readings[i];
+    }
+    avg = (avg/readingCount);
+    float readDiff = abs(readings[readingCount-1] - readings[0]);
+    float avgDiff1 = abs(readings[0] - avg);
+    float avgDiff2 = abs(readings[readingCount-1] - avg);
+    float minDiff = 0.01;
+    Serial.print(":::");
+    Serial.print(readDiff);
+    Serial.print(" - ");
+    Serial.print(avgDiff1);
+    Serial.print(" - ");
+    Serial.print(avgDiff2);
+    Serial.print(" - ");
+    Serial.print(minDiff);
+    Serial.print(":::");
+    if( readDiff < minDiff && avgDiff1 < minDiff && avgDiff2 < minDiff) {
+        return true;
+    }
+    return false;
+}
+
+void TiGY521::caliberate(int LED_PIN) {
+    float yaws[readingCount];
+    float pitches[readingCount];
+    float rolls[readingCount];
+    int tssc = 20;
+    int ssc = tssc;
+    while( true ) {
+        Serial.print("Still caliberating...::");
+        int i = 0;
+        // Serial.print(readingCount);
+        for(i=0; i<readingCount; i++){
+            read();
+            yaws[i] = getYaw();
+            pitches[i] = getPitch();
+            rolls[i] = getRoll();
+        }
+        digitalWrite(LED_PIN, LOW);
+        if(isDirectionCaliberated(yaws) || isDirectionCaliberated(pitches) || isDirectionCaliberated(rolls) ){
+            digitalWrite(LED_PIN, HIGH);
+        }else{
+            digitalWrite(LED_PIN, LOW);
+        }
+        if( isDirectionCaliberated(yaws) && isDirectionCaliberated(pitches) && isDirectionCaliberated(rolls) ){
+            ssc--;
+            Serial.print("caliberated... Checking for successive caliberations.");
+        }else{
+            ssc = tssc;
+        }
+        Serial.println();
+        if(ssc==0){
+            Serial.println("caliberation complete... (y)");
+            break;
+        }
+    }
+    read();
+    yawOffset = getYaw();
+    pitchOffset = getPitch();
+    rollOffset = getRoll();
+    Serial.print("Offsets: Y:: ");
+    Serial.print(yawOffset);
+    Serial.print(" P:: ");
+    Serial.print(pitchOffset);
+    Serial.print(" R:: ");
+    Serial.println(rollOffset);
+}
+
+void TiGY521::debug(char* message) {
 	if(!Serial){
 		Serial.begin(115200);
 	}
-	Serial.println(message);
+	Serial.print(message);
+}
+
+void TiGY521::debugln(char* message) {
+    if(!Serial){
+        Serial.begin(115200);
+    }
+    Serial.println(message);
 }
